@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>拼圖遊戲</title>
+    <title>眼控友善磁吸拼圖遊戲</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -346,7 +346,6 @@
                     piece.style.backgroundSize = `${imgWidth}px ${imgHeight}px`;
                     piece.style.backgroundPosition = `-${c * pieceW}px -${r * pieceH}px`;
 
-                    // 儲存邏輯行列，供即時計算相對位置
                     piece.dataset.row = r;
                     piece.dataset.col = c;
 
@@ -372,7 +371,6 @@
             });
         }
 
-        // 動態即時計算正確目標座標（防止全螢幕跑位）
         function getTargetPosition(piece) {
             const r = parseInt(piece.dataset.row);
             const c = parseInt(piece.dataset.col);
@@ -388,7 +386,6 @@
             return { targetX, targetY };
         }
 
-        // 當螢幕變大變小時，修正已完成鎖定拼圖的位置
         function repositionLockedPieces() {
             document.querySelectorAll('.piece.locked').forEach(piece => {
                 const { targetX, targetY } = getTargetPosition(piece);
@@ -397,13 +394,12 @@
             });
         }
 
-        // 眼控無障礙：滑鼠/視線移動提示與吸附跟隨
+        // 眼控無障礙：滑鼠/視線移動時拼圖跟隨
         gameWrapper.addEventListener('mousemove', (e) => {
             const wrapperRect = gameWrapper.getBoundingClientRect();
             const mouseX = e.clientX - wrapperRect.left;
             const mouseY = e.clientY - wrapperRect.top;
 
-            // 如果已經抓起拼圖，讓拼圖中心黏住游標
             if (attachedPiece) {
                 const pieceW = parseFloat(attachedPiece.style.width);
                 const pieceH = parseFloat(attachedPiece.style.height);
@@ -412,7 +408,6 @@
                 return;
             }
 
-            // 若尚未抓起，掃描附近的未鎖定拼圖並給予高亮指示
             let closestPiece = null;
             let minDist = Infinity;
 
@@ -433,7 +428,7 @@
             }
         });
 
-        // 眼控無障礙：「點擊抓起 / 點擊放下」核心邏輯
+        // 點擊事件：放錯位置時只發出音效，不卸載拼圖
         gameWrapper.addEventListener('click', (e) => {
             if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
 
@@ -442,7 +437,7 @@
             const mouseX = e.clientX - wrapperRect.left;
             const mouseY = e.clientY - wrapperRect.top;
 
-            // 狀態 1: 手上已有拼圖 -> 嘗試放下
+            // 狀態 1: 手上已有拼圖
             if (attachedPiece) {
                 const { targetX, targetY } = getTargetPosition(attachedPiece);
                 const currentX = parseFloat(attachedPiece.style.left);
@@ -451,7 +446,7 @@
                 const dist = Math.hypot(currentX - targetX, currentY - targetY);
 
                 if (dist < SNAP_RADIUS) {
-                    // 放對位置：吸附鎖定
+                    // 放對位置：成功鎖定
                     attachedPiece.style.left = targetX + 'px';
                     attachedPiece.style.top = targetY + 'px';
                     attachedPiece.classList.remove('attached', 'hovered');
@@ -468,15 +463,13 @@
                         }, 200);
                     }
                 } else {
-                    // 放錯位置：留在點擊處並給予錯誤音效，解開跟隨
+                    // 放錯位置：播放錯誤音效，拼圖保持黏附跟隨，無法放下
                     playErrorSound();
-                    attachedPiece.classList.remove('attached');
-                    attachedPiece = null;
                 }
                 return;
             }
 
-            // 狀態 2: 手上沒拼圖 -> 嘗試抓起視線附近的拼圖
+            // 狀態 2: 抓取新拼圖
             let closestPiece = null;
             let minDist = Infinity;
 
@@ -503,7 +496,6 @@
             }
         });
 
-        // 勝利彩帶效果
         function triggerConfetti() {
             canvasConfetti.width = gameWrapper.clientWidth;
             canvasConfetti.height = gameWrapper.clientHeight;
