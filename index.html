@@ -11,7 +11,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            background-color: #1e1e2e;
+            background-color: #121212;
             color: #ffffff;
             margin: 0;
             padding: 10px;
@@ -28,15 +28,21 @@
             gap: 15px;
             align-items: center;
             z-index: 1000;
+            flex-wrap: wrap;
         }
         select, button, input {
             padding: 10px 16px;
-            font-size: 18px; /* 加大按鈕文字供眼控點擊 */
+            font-size: 18px;
             border-radius: 6px;
             border: 1px solid #555;
             background: #3b3b4f;
             color: #fff;
             cursor: pointer;
+        }
+        input[type="color"] {
+            padding: 2px 4px;
+            width: 50px;
+            height: 42px;
         }
         button {
             background-color: #28a745;
@@ -51,36 +57,29 @@
             position: relative;
             width: 96vw;
             height: 85vh;
-            background: #252538;
+            background-color: #252538;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             display: flex;
             justify-content: space-between;
             overflow: hidden;
+            transition: background-color 0.3s ease;
         }
 
-        #game-wrapper:-webkit-full-screen {
-            width: 100vw;
-            height: 100vh;
-            border-radius: 0;
-        }
-        #game-wrapper:fullscreen {
-            width: 100vw;
-            height: 100vh;
-            border-radius: 0;
-        }
+        #game-wrapper:-webkit-full-screen { width: 100vw; height: 100vh; border-radius: 0; }
+        #game-wrapper:fullscreen { width: 100vw; height: 100vh; border-radius: 0; }
 
-        /* 兩側收納區 (加大範圍) */
+        /* 兩側收納區 */
         .dock {
-            width: 20%;
+            width: 22%;
             height: 100%;
-            background-color: #1b1b26;
-            border-right: 3px dashed #444;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-right: 3px dashed rgba(255,255,255,0.2);
             position: relative;
         }
         #dock-right {
             border-right: none;
-            border-left: 3px dashed #444;
+            border-left: 3px dashed rgba(255,255,255,0.2);
         }
 
         /* 中央底板區域 */
@@ -90,20 +89,19 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: #181824;
         }
 
         #board {
             position: relative;
-            box-shadow: 0 0 15px rgba(0,0,0,0.6);
+            box-shadow: 0 0 20px rgba(0,0,0,0.7);
             background-size: 100% 100%;
-            border: 3px solid #666;
+            border: 4px solid #888;
         }
 
         #board-bg {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            opacity: 0.2;
+            opacity: 0.25;
             background-size: 100% 100%;
         }
 
@@ -114,34 +112,39 @@
             pointer-events: none;
         }
         .grid-cell {
-            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border: 2px dashed rgba(255, 255, 255, 0.4);
         }
 
         /* 拼圖塊樣式 */
         .piece {
             position: absolute;
-            cursor: grab;
+            cursor: pointer;
             background-repeat: no-repeat;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            border: 2px solid rgba(255,255,255,0.8);
+            border: 3px solid rgba(255,255,255,0.8);
             transform-origin: center center;
-            transition: transform 0.1s ease;
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
             z-index: 10;
         }
-        .piece.docked {
-            transform: scale(0.65);
+        /* 接近時的眼控視覺提示 */
+        .piece.hovered {
+            border-color: #00ffcc !important;
+            box-shadow: 0 0 20px #00ffcc !important;
+            transform: scale(1.1) !important;
+            z-index: 50 !important;
         }
-        .piece.dragging {
-            cursor: grabbing;
-            transform: scale(1.05);
+        .piece.attached {
+            border-color: #ffcc00 !important;
+            box-shadow: 0 0 25px #ffcc00 !important;
+            transform: scale(1.05) !important;
             z-index: 100 !important;
         }
         .piece.locked {
             cursor: default;
             pointer-events: none;
-            transform: scale(1);
-            box-shadow: none;
-            border: none;
+            transform: scale(1) !important;
+            box-shadow: none !important;
+            border: none !important;
             z-index: 1 !important;
         }
 
@@ -157,6 +160,7 @@
 
     <div id="controls">
         <button id="fullscreen-btn">🖥️ 全螢幕切換</button>
+        <label>背景色: <input type="color" id="bg-color-picker" value="#252538"></label>
         <label>圖片: <input type="file" id="image-upload" accept="image/*"></label>
         <label>片數: 
             <select id="piece-count">
@@ -190,6 +194,7 @@
         const gridOverlay = document.getElementById('grid-overlay');
         const startBtn = document.getElementById('start-btn');
         const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const bgColorPicker = document.getElementById('bg-color-picker');
         const imageUpload = document.getElementById('image-upload');
         const pieceCountSelect = document.getElementById('piece-count');
         const canvasConfetti = document.getElementById('canvas-confetti');
@@ -197,21 +202,34 @@
         let currentImageUrl = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=600&auto=format&fit=crop';
         let imgWidth = 0, imgHeight = 0;
         let lockedCount = 0, totalPieces = 0;
+        let rows = 1, cols = 2;
         
-        // 眼控優化：加大磁吸與抓取判定範圍 (像素)
-        const SNAP_RADIUS = 80; 
-        const PICKUP_RADIUS = 90; 
+        // 眼控判定範圍 (像素)
+        const SNAP_RADIUS = 90; 
+        const PICKUP_RADIUS = 110; 
 
-        let activePiece = null;
-        let isDragging = false;
+        let attachedPiece = null; // 當前跟隨游標的拼圖
 
-        // 全螢幕切換
+        // 背景顏色變更
+        bgColorPicker.addEventListener('input', (e) => {
+            gameWrapper.style.backgroundColor = e.target.value;
+        });
+
+        // 全螢幕切換與防跑位重算
         fullscreenBtn.addEventListener('click', () => {
             if (!document.fullscreenElement) {
                 gameWrapper.requestFullscreen().catch(err => alert("無法開啟全螢幕"));
             } else {
                 document.exitFullscreen();
             }
+        });
+
+        // 監聽螢幕尺寸變化，動態更新已鎖定拼圖的位置
+        window.addEventListener('resize', () => {
+            setTimeout(repositionLockedPieces, 100);
+        });
+        document.addEventListener('fullscreenchange', () => {
+            setTimeout(repositionLockedPieces, 150);
         });
 
         // 音效系統
@@ -239,7 +257,7 @@
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(160, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.2);
             gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
@@ -275,19 +293,22 @@
         startBtn.addEventListener('click', () => { initAudio(); startGame(); });
 
         function startGame() {
+            attachedPiece = null;
             document.querySelectorAll('.piece').forEach(p => p.remove());
             const ctx = canvasConfetti.getContext('2d');
             ctx.clearRect(0, 0, canvasConfetti.width, canvasConfetti.height);
 
-            const [rows, cols] = pieceCountSelect.value.split(',').map(Number);
+            const gridConfig = pieceCountSelect.value.split(',').map(Number);
+            rows = gridConfig[0];
+            cols = gridConfig[1];
             totalPieces = rows * cols;
             lockedCount = 0;
 
             const img = new Image();
             img.src = currentImageUrl;
             img.onload = () => {
-                const containerW = gameWrapper.clientWidth * 0.55;
-                const containerH = gameWrapper.clientHeight * 0.85;
+                const containerW = gameWrapper.clientWidth * 0.52;
+                const containerH = gameWrapper.clientHeight * 0.82;
                 const ratio = Math.min(containerW / img.width, containerH / img.height);
                 imgWidth = Math.floor(img.width * ratio);
                 imgHeight = Math.floor(img.height * ratio);
@@ -305,34 +326,29 @@
                     gridOverlay.appendChild(cell);
                 }
 
-                createPieces(rows, cols);
+                createPieces();
             };
         }
 
-        function createPieces(rows, cols) {
+        function createPieces() {
             const pieceW = imgWidth / cols;
             const pieceH = imgHeight / rows;
-            const boardRect = board.getBoundingClientRect();
-            const wrapperRect = gameWrapper.getBoundingClientRect();
-            const boardLeftInWrapper = boardRect.left - wrapperRect.left;
-            const boardTopInWrapper = boardRect.top - wrapperRect.top;
 
             let piecesList = [];
 
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     const piece = document.createElement('div');
-                    piece.classList.add('piece', 'docked');
+                    piece.classList.add('piece');
                     piece.style.width = pieceW + 'px';
                     piece.style.height = pieceH + 'px';
                     piece.style.backgroundImage = `url(${currentImageUrl})`;
                     piece.style.backgroundSize = `${imgWidth}px ${imgHeight}px`;
                     piece.style.backgroundPosition = `-${c * pieceW}px -${r * pieceH}px`;
 
-                    const targetX = boardLeftInWrapper + c * pieceW;
-                    const targetY = boardTopInWrapper + r * pieceH;
-                    piece.dataset.targetX = targetX;
-                    piece.dataset.targetY = targetY;
+                    // 儲存邏輯行列，供即時計算相對位置
+                    piece.dataset.row = r;
+                    piece.dataset.col = c;
 
                     piecesList.push(piece);
                 }
@@ -340,15 +356,14 @@
 
             piecesList.sort(() => Math.random() - 0.5);
 
-            const leftDockW = gameWrapper.clientWidth * 0.2;
-            const rightDockLeft = gameWrapper.clientWidth * 0.8;
+            const rightDockLeft = gameWrapper.clientWidth * 0.78;
 
             piecesList.forEach((piece, index) => {
                 const isLeft = index % 2 === 0;
                 const dockSlotIndex = Math.floor(index / 2);
                 
-                const dockX = isLeft ? 20 : (rightDockLeft + 20);
-                const dockY = 30 + dockSlotIndex * (pieceH * 0.65 + 15);
+                const dockX = isLeft ? 30 : (rightDockLeft + 20);
+                const dockY = 40 + dockSlotIndex * (pieceH + 15);
 
                 piece.style.left = dockX + 'px';
                 piece.style.top = dockY + 'px';
@@ -357,22 +372,55 @@
             });
         }
 
-        // 磁吸抓取與拖曳機制 (專為眼控優化)
-        gameWrapper.addEventListener('mousedown', (e) => {
-            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        // 動態即時計算正確目標座標（防止全螢幕跑位）
+        function getTargetPosition(piece) {
+            const r = parseInt(piece.dataset.row);
+            const c = parseInt(piece.dataset.col);
+            const pieceW = imgWidth / cols;
+            const pieceH = imgHeight / rows;
 
-            const mouseX = e.clientX;
-            const mouseY = e.clientY;
+            const boardRect = board.getBoundingClientRect();
+            const wrapperRect = gameWrapper.getBoundingClientRect();
 
+            const targetX = (boardRect.left - wrapperRect.left) + c * pieceW;
+            const targetY = (boardRect.top - wrapperRect.top) + r * pieceH;
+
+            return { targetX, targetY };
+        }
+
+        // 當螢幕變大變小時，修正已完成鎖定拼圖的位置
+        function repositionLockedPieces() {
+            document.querySelectorAll('.piece.locked').forEach(piece => {
+                const { targetX, targetY } = getTargetPosition(piece);
+                piece.style.left = targetX + 'px';
+                piece.style.top = targetY + 'px';
+            });
+        }
+
+        // 眼控無障礙：滑鼠/視線移動提示與吸附跟隨
+        gameWrapper.addEventListener('mousemove', (e) => {
+            const wrapperRect = gameWrapper.getBoundingClientRect();
+            const mouseX = e.clientX - wrapperRect.left;
+            const mouseY = e.clientY - wrapperRect.top;
+
+            // 如果已經抓起拼圖，讓拼圖中心黏住游標
+            if (attachedPiece) {
+                const pieceW = parseFloat(attachedPiece.style.width);
+                const pieceH = parseFloat(attachedPiece.style.height);
+                attachedPiece.style.left = (mouseX - pieceW / 2) + 'px';
+                attachedPiece.style.top = (mouseY - pieceH / 2) + 'px';
+                return;
+            }
+
+            // 若尚未抓起，掃描附近的未鎖定拼圖並給予高亮指示
             let closestPiece = null;
             let minDist = Infinity;
 
-            // 尋找視線/游標附近未鎖定的拼圖
             document.querySelectorAll('.piece:not(.locked)').forEach(piece => {
-                const rect = piece.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
-                const dist = Math.hypot(mouseX - centerX, mouseY - centerY);
+                piece.classList.remove('hovered');
+                const pX = parseFloat(piece.style.left) + parseFloat(piece.style.width) / 2;
+                const pY = parseFloat(piece.style.top) + parseFloat(piece.style.height) / 2;
+                const dist = Math.hypot(mouseX - pX, mouseY - pY);
 
                 if (dist < minDist) {
                     minDist = dist;
@@ -380,66 +428,82 @@
                 }
             });
 
-            // 靠近拼圖即可直接吸附抓起
             if (closestPiece && minDist < PICKUP_RADIUS) {
-                initAudio();
-                activePiece = closestPiece;
-                isDragging = true;
-                activePiece.classList.remove('docked');
-                activePiece.classList.add('dragging');
-
-                const wrapperRect = gameWrapper.getBoundingClientRect();
-                const pieceW = parseFloat(activePiece.style.width);
-                const pieceH = parseFloat(activePiece.style.height);
-
-                activePiece.style.left = (mouseX - wrapperRect.left - pieceW / 2) + 'px';
-                activePiece.style.top = (mouseY - wrapperRect.top - pieceH / 2) + 'px';
+                closestPiece.classList.add('hovered');
             }
         });
 
-        window.addEventListener('mousemove', (e) => {
-            if (!isDragging || !activePiece) return;
+        // 眼控無障礙：「點擊抓起 / 點擊放下」核心邏輯
+        gameWrapper.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+            initAudio();
             const wrapperRect = gameWrapper.getBoundingClientRect();
-            const pieceW = parseFloat(activePiece.style.width);
-            const pieceH = parseFloat(activePiece.style.height);
+            const mouseX = e.clientX - wrapperRect.left;
+            const mouseY = e.clientY - wrapperRect.top;
 
-            activePiece.style.left = (e.clientX - wrapperRect.left - pieceW / 2) + 'px';
-            activePiece.style.top = (e.clientY - wrapperRect.top - pieceH / 2) + 'px';
-        });
+            // 狀態 1: 手上已有拼圖 -> 嘗試放下
+            if (attachedPiece) {
+                const { targetX, targetY } = getTargetPosition(attachedPiece);
+                const currentX = parseFloat(attachedPiece.style.left);
+                const currentY = parseFloat(attachedPiece.style.top);
 
-        window.addEventListener('mouseup', () => {
-            if (!isDragging || !activePiece) return;
-            isDragging = false;
-            activePiece.classList.remove('dragging');
+                const dist = Math.hypot(currentX - targetX, currentY - targetY);
 
-            const currentX = parseFloat(activePiece.style.left);
-            const currentY = parseFloat(activePiece.style.top);
-            const targetX = parseFloat(activePiece.dataset.targetX);
-            const targetY = parseFloat(activePiece.dataset.targetY);
+                if (dist < SNAP_RADIUS) {
+                    // 放對位置：吸附鎖定
+                    attachedPiece.style.left = targetX + 'px';
+                    attachedPiece.style.top = targetY + 'px';
+                    attachedPiece.classList.remove('attached', 'hovered');
+                    attachedPiece.classList.add('locked');
+                    playSuccessSound();
 
-            const dist = Math.hypot(currentX - targetX, currentY - targetY);
+                    lockedCount++;
+                    attachedPiece = null;
 
-            if (dist < SNAP_RADIUS) {
-                // 正確放進位置
-                activePiece.style.left = targetX + 'px';
-                activePiece.style.top = targetY + 'px';
-                activePiece.classList.add('locked');
-                playSuccessSound();
-
-                lockedCount++;
-                if (lockedCount === totalPieces) {
-                    setTimeout(() => {
-                        playVictorySound();
-                        triggerConfetti();
-                    }, 200);
+                    if (lockedCount === totalPieces) {
+                        setTimeout(() => {
+                            playVictorySound();
+                            triggerConfetti();
+                        }, 200);
+                    }
+                } else {
+                    // 放錯位置：留在點擊處並給予錯誤音效，解開跟隨
+                    playErrorSound();
+                    attachedPiece.classList.remove('attached');
+                    attachedPiece = null;
                 }
-            } else {
-                // 放錯位置：留在原地，發出錯誤音，不彈回側邊欄
-                playErrorSound();
+                return;
             }
-            activePiece = null;
+
+            // 狀態 2: 手上沒拼圖 -> 嘗試抓起視線附近的拼圖
+            let closestPiece = null;
+            let minDist = Infinity;
+
+            document.querySelectorAll('.piece:not(.locked)').forEach(piece => {
+                const pX = parseFloat(piece.style.left) + parseFloat(piece.style.width) / 2;
+                const pY = parseFloat(piece.style.top) + parseFloat(piece.style.height) / 2;
+                const dist = Math.hypot(mouseX - pX, mouseY - pY);
+
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestPiece = piece;
+                }
+            });
+
+            if (closestPiece && minDist < PICKUP_RADIUS) {
+                attachedPiece = closestPiece;
+                attachedPiece.classList.remove('hovered');
+                attachedPiece.classList.add('attached');
+
+                const pieceW = parseFloat(attachedPiece.style.width);
+                const pieceH = parseFloat(attachedPiece.style.height);
+                attachedPiece.style.left = (mouseX - pieceW / 2) + 'px';
+                attachedPiece.style.top = (mouseY - pieceH / 2) + 'px';
+            }
         });
 
+        // 勝利彩帶效果
         function triggerConfetti() {
             canvasConfetti.width = gameWrapper.clientWidth;
             canvasConfetti.height = gameWrapper.clientHeight;
