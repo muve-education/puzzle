@@ -6,43 +6,53 @@
     <title>眼控友善磁吸拼圖遊戲</title>
     <style>
         * { box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
             background-color: #121212;
             color: #ffffff;
-            margin: 0;
-            padding: 10px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; /* 防止出現卷軸擠壓眼控 */
             user-select: none;
-            overflow: hidden;
         }
-        
+
+        /* 頂部控制列：單行緊湊排版，避免擠壓跑位 */
         #controls {
-            margin-bottom: 10px;
+            height: 60px;
+            width: 100%;
             background: #2b2b3d;
-            padding: 10px 20px;
-            border-radius: 10px;
+            padding: 0 15px;
             display: flex;
-            gap: 15px;
+            gap: 12px;
             align-items: center;
+            justify-content: flex-start;
             z-index: 1000;
-            flex-wrap: wrap;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.4);
         }
         select, button, input {
-            padding: 10px 16px;
-            font-size: 18px;
+            padding: 6px 12px;
+            font-size: 16px;
             border-radius: 6px;
             border: 1px solid #555;
             background: #3b3b4f;
             color: #fff;
             cursor: pointer;
+            white-space: nowrap;
         }
         input[type="color"] {
-            padding: 2px 4px;
-            width: 50px;
-            height: 42px;
+            padding: 1px 2px;
+            width: 45px;
+            height: 36px;
+            vertical-align: middle;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 15px;
+            white-space: nowrap;
         }
         button {
             background-color: #28a745;
@@ -55,56 +65,55 @@
         /* 全螢幕自適應容器 */
         #game-wrapper {
             position: relative;
-            width: 96vw;
-            height: 85vh;
+            width: 100vw;
+            height: calc(100vh - 60px);
             background-color: #252538;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             display: flex;
             justify-content: space-between;
             overflow: hidden;
             transition: background-color 0.3s ease;
         }
 
-        #game-wrapper:-webkit-full-screen { width: 100vw; height: 100vh; border-radius: 0; }
-        #game-wrapper:fullscreen { width: 100vw; height: 100vh; border-radius: 0; }
+        #game-wrapper:-webkit-full-screen { height: 100vh; }
+        #game-wrapper:fullscreen { height: 100vh; }
 
         /* 兩側收納區 */
         .dock {
-            width: 22%;
+            width: 20%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.25);
+            background-color: rgba(0, 0, 0, 0.2);
             border-right: 3px dashed rgba(255,255,255,0.2);
             position: relative;
+            z-index: 5;
         }
         #dock-right {
             border-right: none;
             border-left: 3px dashed rgba(255,255,255,0.2);
         }
 
-        /* 中央底板區域（固定深底色以維持高對比度） */
+        /* 中央底板容器：改為透明，讓自訂背景色完整透出 */
         #board-container {
             position: relative;
             flex-grow: 1;
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: #161622; 
-            border-radius: 8px;
-            margin: 10px;
+            background: transparent;
         }
 
+        /* 拼圖底板：完全貼合圖片長寬比例 */
         #board {
             position: relative;
             box-shadow: 0 0 25px rgba(0,0,0,0.8);
-            background-color: #0c0c14; /* 獨立背景底板，不受全螢幕背景更動影響 */
-            border: 4px solid #777;
+            background-color: #0c0c14;
+            border: 4px solid #ffffff;
+            border-radius: 4px;
         }
 
         #board-bg {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            opacity: 0.5; /* 預設 50% 顯眼提示 */
+            opacity: 0.5;
             background-size: 100% 100%;
             transition: opacity 0.2s ease;
         }
@@ -116,7 +125,7 @@
             pointer-events: none;
         }
         .grid-cell {
-            border: 2px dashed rgba(255, 255, 255, 0.45);
+            border: 2px dashed rgba(255, 255, 255, 0.5);
         }
 
         /* 拼圖塊樣式 */
@@ -124,8 +133,8 @@
             position: absolute;
             cursor: pointer;
             background-repeat: no-repeat;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            border: 3px solid rgba(255,255,255,0.8);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+            border: 3px solid rgba(255,255,255,0.9);
             transform-origin: center center;
             transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
             z-index: 10;
@@ -221,12 +230,10 @@
 
         let attachedPiece = null;
 
-        // 背景顏色變更 (僅影響外圍區域)
         bgColorPicker.addEventListener('input', (e) => {
             gameWrapper.style.backgroundColor = e.target.value;
         });
 
-        // 提示透明度動態切換
         hintOpacitySelect.addEventListener('change', (e) => {
             boardBg.style.opacity = e.target.value;
         });
@@ -240,13 +247,17 @@
         });
 
         window.addEventListener('resize', () => {
-            setTimeout(repositionLockedPieces, 100);
+            setTimeout(() => {
+                startGame();
+            }, 100);
         });
         document.addEventListener('fullscreenchange', () => {
-            setTimeout(repositionLockedPieces, 150);
+            setTimeout(() => {
+                startGame();
+            }, 150);
         });
 
-        // 音效系統
+        // Web Audio API
         let audioCtx = null;
         function initAudio() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -321,8 +332,9 @@
             const img = new Image();
             img.src = currentImageUrl;
             img.onload = () => {
-                const containerW = gameWrapper.clientWidth * 0.52;
-                const containerH = gameWrapper.clientHeight * 0.82;
+                // 自動依據圖片原始比例算出最佳顯示大小
+                const containerW = gameWrapper.clientWidth * 0.55;
+                const containerH = gameWrapper.clientHeight * 0.85;
                 const ratio = Math.min(containerW / img.width, containerH / img.height);
                 imgWidth = Math.floor(img.width * ratio);
                 imgHeight = Math.floor(img.height * ratio);
@@ -370,14 +382,14 @@
 
             piecesList.sort(() => Math.random() - 0.5);
 
-            const rightDockLeft = gameWrapper.clientWidth * 0.78;
+            const rightDockLeft = gameWrapper.clientWidth * 0.80;
 
             piecesList.forEach((piece, index) => {
                 const isLeft = index % 2 === 0;
                 const dockSlotIndex = Math.floor(index / 2);
                 
-                const dockX = isLeft ? 30 : (rightDockLeft + 20);
-                const dockY = 40 + dockSlotIndex * (pieceH + 15);
+                const dockX = isLeft ? 25 : (rightDockLeft + 20);
+                const dockY = 30 + dockSlotIndex * (pieceH + 15);
 
                 piece.style.left = dockX + 'px';
                 piece.style.top = dockY + 'px';
@@ -401,15 +413,6 @@
             return { targetX, targetY };
         }
 
-        function repositionLockedPieces() {
-            document.querySelectorAll('.piece.locked').forEach(piece => {
-                const { targetX, targetY } = getTargetPosition(piece);
-                piece.style.left = targetX + 'px';
-                piece.style.top = targetY + 'px';
-            });
-        }
-
-        // 移動事件
         gameWrapper.addEventListener('mousemove', (e) => {
             const wrapperRect = gameWrapper.getBoundingClientRect();
             const mouseX = e.clientX - wrapperRect.left;
@@ -443,7 +446,6 @@
             }
         });
 
-        // 點擊事件
         gameWrapper.addEventListener('click', (e) => {
             if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
 
