@@ -73,7 +73,7 @@
         .dock {
             width: 22%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: rgba(0, 0, 0, 0.25);
             border-right: 3px dashed rgba(255,255,255,0.2);
             position: relative;
         }
@@ -82,27 +82,31 @@
             border-left: 3px dashed rgba(255,255,255,0.2);
         }
 
-        /* 中央底板區域 */
+        /* 中央底板區域（固定深底色以維持高對比度） */
         #board-container {
             position: relative;
             flex-grow: 1;
             display: flex;
             justify-content: center;
             align-items: center;
+            background-color: #161622; 
+            border-radius: 8px;
+            margin: 10px;
         }
 
         #board {
             position: relative;
-            box-shadow: 0 0 20px rgba(0,0,0,0.7);
-            background-size: 100% 100%;
-            border: 4px solid #888;
+            box-shadow: 0 0 25px rgba(0,0,0,0.8);
+            background-color: #0c0c14; /* 獨立背景底板，不受全螢幕背景更動影響 */
+            border: 4px solid #777;
         }
 
         #board-bg {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            opacity: 0.25;
+            opacity: 0.5; /* 預設 50% 顯眼提示 */
             background-size: 100% 100%;
+            transition: opacity 0.2s ease;
         }
 
         #grid-overlay {
@@ -112,7 +116,7 @@
             pointer-events: none;
         }
         .grid-cell {
-            border: 2px dashed rgba(255, 255, 255, 0.4);
+            border: 2px dashed rgba(255, 255, 255, 0.45);
         }
 
         /* 拼圖塊樣式 */
@@ -126,7 +130,6 @@
             transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
             z-index: 10;
         }
-        /* 接近時的眼控視覺提示 */
         .piece.hovered {
             border-color: #00ffcc !important;
             box-shadow: 0 0 20px #00ffcc !important;
@@ -161,6 +164,14 @@
     <div id="controls">
         <button id="fullscreen-btn">🖥️ 全螢幕切換</button>
         <label>背景色: <input type="color" id="bg-color-picker" value="#252538"></label>
+        <label>底圖提示: 
+            <select id="hint-opacity">
+                <option value="0.5" selected>清晰 (50%)</option>
+                <option value="0.75">顯眼 (75%)</option>
+                <option value="0.25">微弱 (25%)</option>
+                <option value="0">隱藏 (0%)</option>
+            </select>
+        </label>
         <label>圖片: <input type="file" id="image-upload" accept="image/*"></label>
         <label>片數: 
             <select id="piece-count">
@@ -195,6 +206,7 @@
         const startBtn = document.getElementById('start-btn');
         const fullscreenBtn = document.getElementById('fullscreen-btn');
         const bgColorPicker = document.getElementById('bg-color-picker');
+        const hintOpacitySelect = document.getElementById('hint-opacity');
         const imageUpload = document.getElementById('image-upload');
         const pieceCountSelect = document.getElementById('piece-count');
         const canvasConfetti = document.getElementById('canvas-confetti');
@@ -204,18 +216,21 @@
         let lockedCount = 0, totalPieces = 0;
         let rows = 1, cols = 2;
         
-        // 眼控判定範圍 (像素)
         const SNAP_RADIUS = 90; 
         const PICKUP_RADIUS = 110; 
 
-        let attachedPiece = null; // 當前跟隨游標的拼圖
+        let attachedPiece = null;
 
-        // 背景顏色變更
+        // 背景顏色變更 (僅影響外圍區域)
         bgColorPicker.addEventListener('input', (e) => {
             gameWrapper.style.backgroundColor = e.target.value;
         });
 
-        // 全螢幕切換與防跑位重算
+        // 提示透明度動態切換
+        hintOpacitySelect.addEventListener('change', (e) => {
+            boardBg.style.opacity = e.target.value;
+        });
+
         fullscreenBtn.addEventListener('click', () => {
             if (!document.fullscreenElement) {
                 gameWrapper.requestFullscreen().catch(err => alert("無法開啟全螢幕"));
@@ -224,7 +239,6 @@
             }
         });
 
-        // 監聽螢幕尺寸變化，動態更新已鎖定拼圖的位置
         window.addEventListener('resize', () => {
             setTimeout(repositionLockedPieces, 100);
         });
@@ -316,6 +330,7 @@
                 board.style.width = imgWidth + 'px';
                 board.style.height = imgHeight + 'px';
                 boardBg.style.backgroundImage = `url(${currentImageUrl})`;
+                boardBg.style.opacity = hintOpacitySelect.value;
 
                 gridOverlay.innerHTML = '';
                 gridOverlay.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
@@ -394,7 +409,7 @@
             });
         }
 
-        // 眼控無障礙：滑鼠/視線移動時拼圖跟隨
+        // 移動事件
         gameWrapper.addEventListener('mousemove', (e) => {
             const wrapperRect = gameWrapper.getBoundingClientRect();
             const mouseX = e.clientX - wrapperRect.left;
@@ -428,7 +443,7 @@
             }
         });
 
-        // 點擊事件：放錯位置時只發出音效，不卸載拼圖
+        // 點擊事件
         gameWrapper.addEventListener('click', (e) => {
             if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
 
@@ -437,7 +452,6 @@
             const mouseX = e.clientX - wrapperRect.left;
             const mouseY = e.clientY - wrapperRect.top;
 
-            // 狀態 1: 手上已有拼圖
             if (attachedPiece) {
                 const { targetX, targetY } = getTargetPosition(attachedPiece);
                 const currentX = parseFloat(attachedPiece.style.left);
@@ -446,7 +460,6 @@
                 const dist = Math.hypot(currentX - targetX, currentY - targetY);
 
                 if (dist < SNAP_RADIUS) {
-                    // 放對位置：成功鎖定
                     attachedPiece.style.left = targetX + 'px';
                     attachedPiece.style.top = targetY + 'px';
                     attachedPiece.classList.remove('attached', 'hovered');
@@ -463,13 +476,11 @@
                         }, 200);
                     }
                 } else {
-                    // 放錯位置：播放錯誤音效，拼圖保持黏附跟隨，無法放下
                     playErrorSound();
                 }
                 return;
             }
 
-            // 狀態 2: 抓取新拼圖
             let closestPiece = null;
             let minDist = Infinity;
 
