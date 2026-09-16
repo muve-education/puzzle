@@ -75,6 +75,7 @@
         #game-wrapper:-webkit-full-screen { height: 100vh; }
         #game-wrapper:fullscreen { height: 100vh; }
 
+        /* 兩側收納區 */
         .dock {
             width: 22%;
             height: 100%;
@@ -135,7 +136,7 @@
         }
         .piece.hovered {
             border-color: #00ffcc !important;
-            box-shadow: 0 0 20px #00ffcc !important;
+            box-shadow: 0 0 22px #00ffcc !important;
             z-index: 50 !important;
         }
         .piece.attached {
@@ -219,7 +220,7 @@
         let rows = 4, cols = 4;
         
         const SNAP_RADIUS = 90; 
-        const PICKUP_RADIUS = 110; 
+        const PICKUP_RADIUS = 120; 
 
         let attachedPiece = null;
 
@@ -370,37 +371,62 @@
 
             piecesList.sort(() => Math.random() - 0.5);
 
-            const rightDockLeft = gameWrapper.clientWidth * 0.78;
-            
-            // 片數多時採用雙排(2欄)，並依片數自動微縮尺寸以利完整排入側邊欄
-            const colsPerDock = (totalPieces > 6) ? 2 : 1;
-            const scaleFactor = (totalPieces > 8) ? 0.6 : 0.8;
-
+            const leftPieces = [];
+            const rightPieces = [];
             piecesList.forEach((piece, index) => {
-                const isLeft = index % 2 === 0;
-                const dockSlotIndex = Math.floor(index / 2);
-
-                const colInDock = dockSlotIndex % colsPerDock;
-                const rowInDock = Math.floor(dockSlotIndex / colsPerDock);
-
-                const displayW = pieceW * scaleFactor;
-                const displayH = pieceH * scaleFactor;
-
-                let dockX;
-                if (isLeft) {
-                    dockX = 15 + colInDock * (displayW + 6);
-                } else {
-                    dockX = (rightDockLeft + 15) + colInDock * (displayW + 6);
-                }
-                const dockY = 20 + rowInDock * (displayH + 8);
-
-                piece.dataset.scale = scaleFactor;
-                piece.style.left = dockX + 'px';
-                piece.style.top = dockY + 'px';
-                piece.style.transform = `scale(${scaleFactor})`;
-
-                gameWrapper.appendChild(piece);
+                if (index % 2 === 0) leftPieces.push(piece);
+                else rightPieces.push(piece);
             });
+
+            // 動態自適應計算：自動填滿兩側收納區上下高度
+            function arrangeDock(pieces, isLeft) {
+                const count = pieces.length;
+                if (count === 0) return;
+
+                const dockEl = isLeft ? document.getElementById('dock-left') : document.getElementById('dock-right');
+                const dockRect = dockEl.getBoundingClientRect();
+                const wrapperRect = gameWrapper.getBoundingClientRect();
+
+                let dockCols = (count > 4) ? 2 : 1;
+                let dockRows = Math.ceil(count / dockCols);
+
+                const paddingX = 16;
+                const paddingY = 20;
+                const availW = dockRect.width - paddingX * 2;
+                const availH = dockRect.height - paddingY * 2;
+
+                const slotW = availW / dockCols;
+                const slotH = availH / dockRows;
+
+                // 計算最大容納縮放比例（預留 8% 間距防重疊）
+                const scaleW = slotW / pieceW;
+                const scaleH = slotH / pieceH;
+                const scaleFactor = Math.min(scaleW, scaleH) * 0.92;
+
+                const baseLeft = (dockRect.left - wrapperRect.left) + paddingX;
+                const baseTop = (dockRect.top - wrapperRect.top) + paddingY;
+
+                pieces.forEach((piece, idx) => {
+                    const colIdx = idx % dockCols;
+                    const rowIdx = Math.floor(idx / dockCols);
+
+                    const slotCenterX = baseLeft + colIdx * slotW + slotW / 2;
+                    const slotCenterY = baseTop + rowIdx * slotH + slotH / 2;
+
+                    const pieceLeft = slotCenterX - pieceW / 2;
+                    const pieceTop = slotCenterY - pieceH / 2;
+
+                    piece.dataset.scale = scaleFactor;
+                    piece.style.left = pieceLeft + 'px';
+                    piece.style.top = pieceTop + 'px';
+                    piece.style.transform = `scale(${scaleFactor})`;
+
+                    gameWrapper.appendChild(piece);
+                });
+            }
+
+            arrangeDock(leftPieces, true);
+            arrangeDock(rightPieces, false);
         }
 
         function getTargetPosition(piece) {
