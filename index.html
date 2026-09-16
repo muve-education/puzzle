@@ -181,9 +181,9 @@
                 <option value="1,2">2片 (1x2)</option>
                 <option value="2,2">4片 (2x2)</option>
                 <option value="2,3">6片 (2x3)</option>
-                <option value="3,3">9片 (3x3)</option>
+                <option value="3,3" selected>9片 (3x3)</option>
                 <option value="3,4">12片 (3x4)</option>
-                <option value="4,4" selected>16片 (4x4)</option>
+                <option value="4,4">16片 (4x4)</option>
             </select>
         </label>
         <button id="start-btn">重新開始</button>
@@ -217,7 +217,7 @@
         let currentImageUrl = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=600&auto=format&fit=crop';
         let imgWidth = 0, imgHeight = 0;
         let lockedCount = 0, totalPieces = 0;
-        let rows = 4, cols = 4;
+        let rows = 3, cols = 3;
         
         const SNAP_RADIUS = 90; 
         const PICKUP_RADIUS = 120; 
@@ -378,7 +378,6 @@
                 else rightPieces.push(piece);
             });
 
-            // 動態自適應計算：自動填滿兩側收納區上下高度
             function arrangeDock(pieces, isLeft) {
                 const count = pieces.length;
                 if (count === 0) return;
@@ -387,7 +386,8 @@
                 const dockRect = dockEl.getBoundingClientRect();
                 const wrapperRect = gameWrapper.getBoundingClientRect();
 
-                let dockCols = (count > 4) ? 2 : 1;
+                // 9片模式下強制左右皆採用單欄(1欄)直列，其餘片數維持原自動邏輯
+                let dockCols = (totalPieces === 9) ? 1 : ((count > 4) ? 2 : 1);
                 let dockRows = Math.ceil(count / dockCols);
 
                 const paddingX = 16;
@@ -398,7 +398,6 @@
                 const slotW = availW / dockCols;
                 const slotH = availH / dockRows;
 
-                // 計算最大容納縮放比例（預留 8% 間距防重疊）
                 const scaleW = slotW / pieceW;
                 const scaleH = slotH / pieceH;
                 const scaleFactor = Math.min(scaleW, scaleH) * 0.92;
