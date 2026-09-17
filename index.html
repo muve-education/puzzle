@@ -75,7 +75,6 @@
         #game-wrapper:-webkit-full-screen { height: 100vh; }
         #game-wrapper:fullscreen { height: 100vh; }
 
-        /* 兩側收納區 */
         .dock {
             width: 22%;
             height: 100%;
@@ -219,8 +218,9 @@
         let lockedCount = 0, totalPieces = 0;
         let rows = 3, cols = 3;
         
-        const SNAP_RADIUS = 90; 
-        const PICKUP_RADIUS = 120; 
+        // 加大眼控吸附與抓取距離判定
+        const SNAP_RADIUS = 110; 
+        const PICKUP_RADIUS = 130; 
 
         let attachedPiece = null;
 
@@ -386,7 +386,7 @@
                 const dockRect = dockEl.getBoundingClientRect();
                 const wrapperRect = gameWrapper.getBoundingClientRect();
 
-                // 9片模式下強制左右皆採用單欄(1欄)直列，其餘片數維持原自動邏輯
+                // 9片模式下強制左右皆採用單欄(1欄)直列，其餘片數維持自動縮放
                 let dockCols = (totalPieces === 9) ? 1 : ((count > 4) ? 2 : 1);
                 let dockRows = Math.ceil(count / dockCols);
 
@@ -443,19 +443,47 @@
             return { targetX, targetY };
         }
 
+        // 視線移動監聽：負責游標跟隨、自動靠近吸附、視覺發光提示
         gameWrapper.addEventListener('mousemove', (e) => {
             const wrapperRect = gameWrapper.getBoundingClientRect();
             const mouseX = e.clientX - wrapperRect.left;
             const mouseY = e.clientY - wrapperRect.top;
 
+            // 狀態 1：手上已有拼圖 -> 拼圖跟隨游標 + 靠近自動吸附
             if (attachedPiece) {
                 const pieceW = parseFloat(attachedPiece.style.width);
                 const pieceH = parseFloat(attachedPiece.style.height);
                 attachedPiece.style.left = (mouseX - pieceW / 2) + 'px';
                 attachedPiece.style.top = (mouseY - pieceH / 2) + 'px';
+
+                // 【自動靠近吸附放回機制】
+                const { targetX, targetY } = getTargetPosition(attachedPiece);
+                const currentX = parseFloat(attachedPiece.style.left);
+                const currentY = parseFloat(attachedPiece.style.top);
+                const dist = Math.hypot(currentX - targetX, currentY - targetY);
+
+                if (dist < SNAP_RADIUS) {
+                    attachedPiece.style.left = targetX + 'px';
+                    attachedPiece.style.top = targetY + 'px';
+                    attachedPiece.classList.remove('attached', 'hovered');
+                    attachedPiece.classList.add('locked');
+                    attachedPiece.style.transform = 'scale(1)';
+                    playSuccessSound();
+
+                    lockedCount++;
+                    attachedPiece = null;
+
+                    if (lockedCount === totalPieces) {
+                        setTimeout(() => {
+                            playVictorySound();
+                            triggerConfetti();
+                        }, 200);
+                    }
+                }
                 return;
             }
 
+            // 狀態 2：手上沒拼圖 -> 尋找距離視線最近的側邊拼圖並高亮提示
             let closestPiece = null;
             let minDist = Infinity;
 
@@ -481,6 +509,7 @@
             }
         });
 
+        // 點擊事件：負責單鍵抓取
         gameWrapper.addEventListener('click', (e) => {
             if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
 
@@ -489,36 +518,13 @@
             const mouseX = e.clientX - wrapperRect.left;
             const mouseY = e.clientY - wrapperRect.top;
 
+            // 如果手上已有拼圖，但尚未到達自動吸附距離 -> 播放音效提示，拼圖「不掉落」繼續跟隨
             if (attachedPiece) {
-                const { targetX, targetY } = getTargetPosition(attachedPiece);
-                const currentX = parseFloat(attachedPiece.style.left);
-                const currentY = parseFloat(attachedPiece.style.top);
-
-                const dist = Math.hypot(currentX - targetX, currentY - targetY);
-
-                if (dist < SNAP_RADIUS) {
-                    attachedPiece.style.left = targetX + 'px';
-                    attachedPiece.style.top = targetY + 'px';
-                    attachedPiece.classList.remove('attached', 'hovered');
-                    attachedPiece.classList.add('locked');
-                    attachedPiece.style.transform = 'scale(1)';
-                    playSuccessSound();
-
-                    lockedCount++;
-                    attachedPiece = null;
-
-                    if (lockedCount === totalPieces) {
-                        setTimeout(() => {
-                            playVictorySound();
-                            triggerConfetti();
-                        }, 200);
-                    }
-                } else {
-                    playErrorSound();
-                }
+                playErrorSound();
                 return;
             }
 
+            // 尋找視線目標區域內最近的拼圖並抓起
             let closestPiece = null;
             let minDist = Infinity;
 
